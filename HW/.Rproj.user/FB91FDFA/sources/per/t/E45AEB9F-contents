@@ -1,0 +1,232 @@
+---
+title: "HW1"
+author: "Joaquin Rodriguez"
+date: "9/26/2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 2.4 Table B.3 presents data on the gasoline mileage performance of 32 different automobiles.
+
+### a. Fit a simple linear regression model relating gasoline mileage y (miles per gallon) to engine displacement x1 (cubic inches).
+
+```{r}
+library(MPV)
+library(tidyverse)
+library(MASS)
+
+auto <- table.b3
+
+names(auto) <- c("Miles/gallon", "Displacement (cubic in)", "Horsepower (ft-lb)", "Torque (ft-lb)", "Compression ratio", "Rear axle ratio", "Carburetor (barrels)", "No. of transmission speeds", "Overall length (in)", "Width (in)", "Weight (lb)", "Type of transmission (1=automatic, 0=manual)")
+
+
+fit1 <- lm(`Miles/gallon` ~ `Displacement (cubic in)`, data = auto)
+```
+
+### b. Construct the analysis-of-variance table and test for significance of regression.
+
+```{r}
+sum.fit1 <- summary(fit1)
+sum.fit1
+anova(fit1)
+```
+
+### c. What percent of the total variability in gasoline mileage is accounted for by the linear relationship with engine displacement?
+
+The Adjusted R-squared for the linear model is `r round(sum.fit1$adj.r.squared, 3)`. Therefore, the engine displacement explains up to `paste(round(sum.fit1$adj.r.squared, 3), "%", sep = "")` of the variability of in the gasoline mileage data.
+
+### d. Find a 95% CI on the mean gasoline mileage if the engine displacement is 275 in.3
+
+```{r}
+newdata2.4 <- data.frame(275)
+names(newdata2.4) <- c("Displacement (cubic in)")
+predict.lm(fit1, newdata2.4, interval = "confidence", level = 0.95)
+```
+
+### e. Suppose that we wish to predict the gasoline mileage obtained from a car with a 275-in.3 engine. Give a point estimate of mileage. Find a 95% prediction interval on the mileage.
+
+```{r}
+predict.lm(fit1, newdata2.4, interval = "prediction", level = 0.95)
+```
+
+### f. Compare the two intervals obtained in parts d and e. Explain the difference between them. Which one is wider, and why?
+
+The prediction interval for the for the mean response provides the confidence interval for the response if we were to use a different sample from the one used to fit the regression. On the other hand, the confidence interval for the prediction estimates the CI for new observations, therefore considering the true error. As a consequence, the prediction interval will be wider as we have to consider the true error associated to the model. In fact, in the prediction formula we use an extra shock of root MSE to increase the width of the prediction.
+
+## 2.6 Table B.4 presents data for 27 houses sold in Erie, Pennsylvania.
+
+### a. Fit a simple linear regression model relating selling price of the house to the current taxes (x1).
+
+```{r}
+property <- table.b4
+
+names(property) <- c("sale price of the house (in thousands of dollars)","taxes (in thousands of dollars)", "number of baths", "lot size (in thousands of square feet)", "living space (in thousands of square feet)", "number of garage stalls", "number of rooms", "number of bedrooms", "age of the home (in years)", "number of fireplaces")
+
+fit2 <- lm(`sale price of the house (in thousands of dollars)` ~ `taxes (in thousands of dollars)`, data = property)
+sum.fit2 <- summary(fit2)
+```
+
+### b. Test for significance of regression.
+
+```{r}
+summary(fit2)
+```
+
+
+### c. What percent of the total variability in selling price is explained by this model?
+
+
+The Adjusted R-squared for the linear model is `r round(sum.fit2$adj.r.squared, 3)`. Therefore, the taxes explains up to `r paste(round(sum.fit2$adj.r.squared, 3)*100, "%", sep = "")` of the variability of the sale price of the house.
+
+### d. Find a 95% CI on B1.
+```{r}
+confint(fit2)
+```
+
+### e. Find a 95% CI on the mean selling price of a house for which the current taxes are $750.
+```{r}
+newdata <- data.frame(750)
+names(newdata) <-  c("taxes (in thousands of dollars)")
+predict(fit2, newdata = newdata, interval = "confidence")
+```
+
+
+## 3.5 Consider the gasoline mileage data in Table B.3.
+
+### a. Fit a multiple linear regression model relatmg gasoline mileage y (miles per gallon) to engine displacement x1 and the number of carburetor barrels x6.
+
+```{r}
+fit3 <- lm(`Miles/gallon` ~ `Displacement (cubic in)` + `Carburetor (barrels)`, data = auto)
+
+```
+
+### b. Construct the analysis-of-variance table and test for significance of regression
+```{r}
+summary(fit3)
+anova(fit3)
+```
+
+### c. Calculate R^2 and R^2 for this model. Compare this to the R^2 and the R^2Adj for the simple linear regression model relating mileage to engine displacement in Problem 2.4
+
+```{r}
+# full model
+fit3.summ <- summary(fit3)
+fit3.summ$r.squared
+fit3.summ$adj.r.squared
+
+# reduced model
+fit1.summ <- summary(fit1)
+fit1.summ$r.squared
+fit1.summ$adj.r.squared
+```
+
+The R^2 and R^2adj for the full model are respectively: `r round(fit3.summ$r.squared,2)` and `r round(fit3.summ$adj.r.squared,2)`.
+Whereas, the R^2 and R^2adj for the reduced model are respectively: `r round(fit1.summ$r.squared,2)` and `r round(fit1.summ$adj.r.squared,2)`.  
+As we can observe the R^2 and R^2adj for both models are nearly the same; the R^2 for the reduced model is slightly lower compared to the full one. The difference is around 1% and therefore the Carburetor variable does not significantly increase the portion of the variance explained by the model.
+
+### d. Find a 95% CI for B1.
+
+```{r}
+confint(fit3)
+```
+
+### e. Compute the t statistics for testing H0: B1 = 0 and H0: B6 = 0. What conclusions can you draw?
+
+```{r}
+summary(fit3)
+```
+
+The Displacement predictor has a really low p-value, therefore we can reject the Null Hypothesis meaning that this beta is significantly different from zero.  
+The Carburetor predictor has a high p-value, therefore we fail to reject the Null Hypothesis meaning that this beta is not significantly diffrent from zero. Therefore, the Carburetor predictor does not seem to add any significant information compared to the reduced model.  
+
+
+### f. Find a 95% CI on the mean gasoline mileage when x1 = 275 in.3 and x6 = 2 barrels.
+
+```{r}
+newdata3.5 <- data.frame(275, 2)
+names(newdata3.5) <- c("Displacement (cubic in)", "Carburetor (barrels)")
+predict.lm(fit3, newdata3.5, interval = "confidence", level = 0.95)
+```
+
+### g. Find a 95% prediction interval for a new observation on gasoline mileage when x1 = 275 in.3 and x6 = 2 barrels.
+```{r}
+predict.lm(fit3, newdata3.5, interval = "prediction", level = 0.95)
+```
+
+## 3.6 In problem 2.4 you were asked to compute a 95% CI on mean gasoline prediction interval on mileage when the engine displacement x1 = 275 in.^3 Compare the lengths of these intervals to the lengths of the confidence and prediction intervals from Problem 3.5 above. Does this tell you anything about the benefits of adding x6 to the model?
+
+```{r}
+# reduced model
+a <- predict.lm(fit1, newdata2.4, interval = "prediction", level = 0.95) %>% print()
+a[1,3]- a[1,2] 
+
+# full model
+a <- predict.lm(fit3, newdata3.5, interval = "prediction", level = 0.95) %>% print()
+a[1,3]- a[1,2] 
+```
+
+As we can observe interval length for the full model is slightly lower compared to the reduced model. Therefore, the full model is able to predict with a better confidence the mean gasoline consumption. This result is a consequence of the fact that the full model has a slightly higher adj R^2 compared to the reduced model. However, we can observe how the difference in interval length is quite small.  
+
+## 4.4 Consider the multiple regression model fit to the gasoline mileage data in Problem 3.5.
+
+```{r}
+plot(fit3)
+```
+
+### a. Construct a normal probability plot of the residuals. Does there seem to be any problem with the normality assumption?
+
+From the Normal Q-Q Plot we can observe how the assumption of normality appears to hold. There is a small departure from normaliy for some observations, however these departures do not seem to be significant enough to undermine the normality assumption.  
+
+### b. Construct and interpret a plot of the residuals versus the predicted response.
+
+From that standardized residual vs predicted response plot we can observe how the residuals are generally speaking equally spread along the ranges of the predictors. From the plot we can observe how there are three observations (#12, #15, #22) that have high residuals, thus indicating possible outliers or leverage points.
+
+### c. Construct and interpret the partial regression plots for this model.
+
+```{r}
+auto %>%
+  ggplot(aes(x = `Displacement (cubic in)`, y = `Miles/gallon`)) +
+  geom_point()
+```
+
+We can observe how the relationship between Consumption vs Displacement approximates a simple linear trend. It is likely that the relationship would be better approximated by a second order polinomial.
+
+```{r}
+auto %>%
+  ggplot(aes(x = `Carburetor (barrels)`, y = `Miles/gallon`)) +
+  geom_point()
+```
+
+As we can observe from the plot the relationship between Consumption and Carburetor do not seem to be correctly approximated by a linear regression. In fact, for each level of Carburetor we have significant variation. This is coherent with the fact that the Carburetor variable does not result to be significantly different from zero.
+
+### Compute the studentized residuals and the R-student residuals for this model. What information is conveyed by these scaled residuals?
+
+```{r}
+#studentized residuals
+residuals(fit3) / fit3.summ$sigma * sqrt (1 - influence(fit3)$hat)
+
+#R-student residual
+rstudent(fit3)
+```
+
+The studentized residuals provide a proper standardization of the errors as it considers also the hat values of the observations. In fact, the studentized residual follow closely a Z standard normal.  
+The R-student provides a studentized residuals where the estemiate of sigma squared is estimated leaving out the current observation. Therefore, the R-student provides a externally studentized residuals.  
+From these residuals we can identify those observations that the model does not produce an adequate estimate. These measures are useful in order to identigy outliers and influential observations, but also deviations of the data from the underlying model assumed.  
+
+
+## 4.14 Problems 2.4 and 3.5 asked you to fit two different models to the gasoline mileage data in Table B.3. Calculate the PRESS statistic for these two models. Based on this statistic, which model is most likely to provide better predictions of new data?
+
+```{r}
+# PRESS 2.4
+sum( (resid(fit1) / (1- influence(fit1)$hat)) ^2 )
+
+# PRESS 3.5
+sum( (resid(fit3) / (1- influence(fit3)$hat)) ^2 )
+```
+
+The PRESS conveys better predictions of new data for lower levels. Therefore, the model that is more likely predict better predictions of new data is the model we fit in point 3.5.

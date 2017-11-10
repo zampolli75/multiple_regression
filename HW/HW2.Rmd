@@ -1,0 +1,515 @@
+---
+title: "HW2"
+author: "Joaquin Rodriguez"
+date: "11/1/2017"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE )
+```
+
+```{r}
+library(tidyverse)
+library(ggfortify)
+library(stargazer)
+library(broom)
+library(knitr)
+library(car)
+library(MPV)
+library(ridge)
+library(MASS)
+library(leaps)
+library(nlstools)
+
+temp <- c(273,283,293,303,313,323,333,343,353,363,373)
+press <- c(4.6, 9.2, 17.5, 31.8, 55.3, 92.5, 149.4, 233.7, 355.1, 525.8, 760)
+
+df <- data.frame(temp, press)
+```
+
+## 5.2 The following table gives the vapor pressure of water for various temperatures.
+
+### a. Plot a scatter diagram. Does it seem likely that a straight-line model will be adequate?
+
+```{r}
+df %>% 
+  ggplot(aes(temp,press))+
+  geom_point()
+```
+
+A straight line model does not seem adequate as the relationship appears to be exponential.
+
+### b. Fit the straight-line model. Compute the summary statistics and the residual plots. What are your conclusions regarding model adequacy?
+
+```{r}
+lm5.2_a <- lm(temp ~ press, data = df)
+lm5.2_a_summ <- summary(lm5.2_a)
+```
+
+```{r results='asis'}
+stargazer(lm5.2_a, header = FALSE, report = "vc*p", type = "html")
+```
+
+```{r}
+autoplot(lm5.2_a, which = 1:6, ncol = 2, label.size = 3)
+```
+
+The summary statistics provide a good support for the goodness of the model. In fact, the Adj-Rsquared is quite high, and all the predictor and intercept are significant at 0.05.  
+However, from the analysis of the residuals we observe how the model does not satisfied the model assumptions. Specifically, the homogeneity condition and the normality distribution of the errors are not satisfied.  
+Therefore, the stragiht line model is not adequate to explain the relationship between pressure and temperature.
+
+### c. From physical chemistry the Clausius-Clapeyron equation states that: $\ln(p_{v}) \infty - \frac{1}{T}$ Repeat part b using the appropriate transformation based on this information.
+
+```{r}
+lm5.2_b <- lm(-(1/temp) ~ log(press), data = df)
+lm5.2_b_summ <- summary(lm5.2_b)
+```
+
+```{r}
+df %>% 
+  ggplot(aes(-(1/temp),log(press)))+
+  geom_point()
+```
+
+```{r results='asis'}
+stargazer(lm5.2_b, header = FALSE, report = "vc*p", type = "html")
+```
+
+```{r}
+autoplot(lm5.2_b, which = 1:6, ncol = 2, label.size = 3)
+```
+
+As we can observe from the summary statitics, the model with the transformed predictors and response variables perfectly explains the relationship between the variables. In fact, the Adj-Rsquared is 1, and all the $\beta$ are significant at 0.05.  
+Furthermore, the residual plot show how the model assumptions are satisfied. Therefore, this models perdicts and explains perfectly the relationship between pressure and temperature.
+
+## 5.4 Consider the data shown below. Construct a scatter diagram and suggest an appropriate form for the regression model. Fit this model to the data and conduct the standard tests of model adequacy.
+
+```{r}
+x <- c(10, 15, 18, 12, 9, 8, 11, 6)
+y <- c(0.17, 0.13, 0.09, 0.15, 0.20, 0.21, 0.18, 0.24)
+df <- data.frame(y, x)
+```
+
+```{r}
+df %>% 
+  ggplot(aes(x, y))+
+  geom_point()+
+  geom_smooth(method = "lm", formula = y ~ x)
+```
+
+From the scatterplot we can observe how there seems to be a strong linear relationship between the predictors and predicted variables. Therefore, I model a straight line model.
+
+```{r}
+lm5.4_a <- lm(y ~ x , data = df)
+lm5.4_a <- lm(y ~ x , data = df)
+lm5.4_a_summ <- summary(lm5.4_a)
+```
+
+```{r results='asis'}
+stargazer(lm5.4_a, header = FALSE, report = "vc*p", type = "html")
+```
+
+From the summary statistics we can observe how the model explains almost all variability in the data, as the R-squared is `r lm5.4_a_summ$r.squared %>% round(2)` and predictor is significant at 0.05.
+
+```{r}
+autoplot(lm5.4_a, which = 1:6, ncol = 2, label.size = 3)
+```
+
+As we can observe from the residual plots, the model appears to do not meet some of the assumptions. In particular, we can se how at the tails, the residuals deviate from a normal distribution. Furthermore, the rediduals do not seem to have an homogeneous variance.
+
+## 6.1 Perform a thorough influence analysis of the solar thermal energy test data given in Table B.2. Discuss your results.
+```{r}
+
+df <- table.b2
+
+lm6.1 <- lm(y ~ ., data = df)
+lm6.1_summ <- summary(lm6.1)
+```
+
+Following we will analyze the residuals in order to determine the observations that can be considered outliers, leverage, or influential.
+
+```{r}
+autoplot(lm6.1, which = 1:6, ncol = 2, label.size = 3)
+```
+
+From the Cook's D plot we can observe how there is an observation which has a value > 1. From the residuals vs leverage plot we observe how there are three observations with levarage > 0.4. From the Cook's D vs Leverage plot we observe that there are two observations that might be problematic.  
+Following we identify those observations that exceed the following thresholds:  
+1. hat: $h_{ii} > 2 \frac{p}{n}$ = `r 2 * length(lm6.1$coefficients) / length(lm6.1$fitted.values)`  
+2. cook's d: > 1  
+3. r-student: > 2-3  
+
+```{r}
+lm6.1 %>%
+  augment() %>% 
+  mutate(.squared = ((sum(.resid^2) - .resid^2) / (1 - .hat)) / ( length(lm6.1$fitted.values) - length(lm6.1$coefficients) - 1) ,
+         .r.student = .resid / sqrt(.squared * (1 - .hat) ) ) %>% 
+  filter(.hat > 2 * length(lm6.1$coefficients) / length(lm6.1$fitted.values) |
+         .cooksd > 1 |
+         abs(.r.student) > 2) %>% 
+  kable(.)
+```
+
+From the above table we can observe how there are only two observations which might be possible problematic for our model. The first one has a high hat value, meaning it is a leverage point. The cook's D and r-student values do not exceed the thresholds and therefore the observation is not influential. On the other hand, the observation in the second has a cook's D value > 1, meaning that it is an influential point. In fact, it has high hat and r-student values.  
+
+## 6.10 Formally show that
+
+$$ D_{i} = \frac{ (\hat{\beta} - \hat{\beta}_{-i})^\prime (X^\prime X) (\hat{\beta} - \hat{\beta_{-i}}) } {p(SSE)} $$
+$$\hat{\beta_{-i}} = \hat{\beta}-ADJ $$
+$$ADJ = \frac{e_{i}}{1-h_{ii}} (X^\prime X)^{-\prime} \underline{X}_{i} $$
+
+$$ D_{i} = \frac{e^2_{i}}{(1-h_{ii})^2} \frac{X^\prime_{i} (X^\prime X)^{-1} X^\prime X (X^\prime X)^{-1} \underline{X}_{i}} {p(MSE)} $$
+$$ r_{i} = \frac{e_{i}}{\sqrt{MSE(1-h_{ii})}} = \frac{e_{i}^2}{{MSE(1-h_{ii})}} $$
+
+$$ D_{i} = \frac{e^2_{i}}{(1-h_{ii})^2} \frac{h_{ii}}{p(MSE)} = \frac{r^2_{i} h_{ii}} {(1 - h_{ii})p}$$
+
+## 7.18 An article in the Journal of Pharmaceutical Sciences (80, 971–977, 1991) presents data on the observed mole fraction solubility of a solute at a constant temperature, along with x1 = dispersion partial solubility, x2 = dipolar partial solubility, and x3 = hydrogen bonding Hansen partial solubility. The response y is the negative logarithm of the mole fraction solubility.
+
+```{r}
+df <- read.csv(file = "data/data-prob-7-18.csv")
+```
+
+### a. Fit a complete quadratic model to the data.
+```{r}
+lm7.8 <- lm(y ~ x1 + I(x1^2) + x2 + I(x2^2) + x3 + I(x3^2), data = df)
+lm7.8_summ <- summary(lm7.8)
+```
+
+```{r results='asis'}
+stargazer(lm7.8, header = FALSE, report = "vc*p", type = "html")
+```
+
+### b. Test for significance of regression, and construct t statistics for each model parameter. Interpret these results.
+```{r}
+lm7.8_summ
+```
+
+The F-statistic for the model is significant at 0.05, therefore at least one parameter is significantly different from 0. As we can observe from the above output only one predictor parameter is significant at 0.05 (i.e. hydrogen). All other parameters are non significant. Overall, the complete quadratic model does not seem to be a good fit of the data, in fact, the high R-square is likely the result of overfitting and multicollinearity.  
+
+### c. Plot residuals and comment on model adequacy.
+```{r}
+autoplot(lm7.8, which = 1:6, ncol = 2, label.size = 3)
+```
+
+From the residuals plots we conform that the model does not provide a good fit for the data. In particular, we observe how the distribution of the error is significantly non-normal.
+
+### d. Use the extra-sum-of-squares method to test the contribution of all second-order terms to the model.
+
+Following we analyze the extra sum squares type II.
+
+```{r}
+options(contrasts=c(unordered="contr.sum",       ordered="contr.poly"))
+
+anova(lm7.8)
+```
+
+As we can observe from the above table, the second-order term that is significant is x1^2. None of the other second-order terms seem to significantly contribute to explaining the variance of the predicted variable.  
+
+## 7.19 Consider the quadratic regression model from Problem 7.18. Find the variance inflation factors and comment on multicollinearity in this model.
+
+```{r}
+vif(lm7.8)
+```
+
+The VIF values signal strong problems of collinearity, however in this particular case it is not interpretable because by definition the second-order terms are non dependent from from the first order terms.
+
+## 7.20 Consider the solubility data from Problem 7.18. Suppose that a point of interest is x1 = 8.0, x2 = 3.0, and x3 = 5.0.
+
+### a. For the quadratic model from Problem 7.18, predict the response at the point of interest and find a 95% confidence interval on the mean response at that point.
+
+```{r}
+newdata <- data.frame(x1 = c( 8),x2 = c(3), x3 = c(5))
+predict(lm7.8, newdata = newdata, interval = c("prediction"), level = 0.95) %>%  print() -> p
+p[3] - p[2]
+```
+
+### b. Fit a model that includes only the main effects and two-factor interactions to the solubility data. Use this model to predict the response at the point of interest. Find a 95% confidence interval on the mean response at that point.
+
+```{r}
+lm7.20 <- lm(y ~ x1 + x2 + x3 + x1*x2 + x1*x3 + x2*x3, data = df)
+predict(lm7.20, newdata = newdata, interval = c("prediction"), level = 0.95) %>% print() -> p
+p[3] - p[2]
+``` 
+
+### c. Compare the lengths of the confidence intervals in parts a and b. Can you draw any conclusions about the best model from this comparison?
+The model with only main effect and interactions provides a narrower CI, therefore it is preferred as it is able to predict with higher precition new observations.
+
+## 8.4 Consider the automobile gasoline mileage data in Table B.3.
+
+```{r}
+auto <- table.b3
+```
+
+### a. Build a linear regression model relating gasoline mileage y to engine displacement x1 and the type of transmission x11. Does the type of transmission significantly affect the mileage performance?
+
+```{r}
+lm8.4_a <- lm(y ~ x1 +x11 , data = auto)
+```
+
+```{r results='asis'}
+stargazer(lm8.4_a, header = FALSE, report = "vc*p", type = "html")
+```
+
+No, the type of transmission does not appears to significantly influence the mileage performance of the vehicles.
+
+### b. Modify the model developed in part a to include an interaction between engine displacement and the type of transmission. What conclusions can you draw about the effect of the type of transmission on gasoline mileage? Interpret the parameters in this model.
+
+```{r}
+lm8.4_b <- lm(y ~ x1 +x11 + x1*x11 , data = auto)
+```
+
+```{r}
+auto %>%
+  ggplot(aes(x1 , y))+
+  geom_point(aes(color = as.factor(x11)))+
+  geom_smooth(formula = y ~ x, method = "lm")
+```
+
+```{r results='asis'}
+stargazer(lm8.4_b, header = FALSE, report = "vc*p", type = "html")
+```
+
+With the introduction of the interaction term now the for the possibility of chaging the slope of the regression line for the two types of transmission. With the introduction of the interaction effect the main trainsmission effect becomes significant. The intercept becomes relevant at explaining the data as we consider also different slopes for the two types of transmissions.
+
+## 8.9 Suppose that a one-way analysis of variance involves four treatments but that a different number of observations (e.g., ni) has been taken under each treatment.Assuming that n1 = 3, n2 = 2, n3 = 4, and n4 = 3, write down the y vector and X matrix for analyzing these data as a multiple regression model. Are any complications introduced by the unbalanced nature of these data?
+
+$$\mathbf{X} = \left[\begin{array}
+{rrr}
+1 & 0 & 0 & 0 \\
+1 & 0 & 0 & 0 \\
+1 & 0 & 0 & 0 \\
+1 & 1 & 0 & 0 \\
+1 & 1 & 0 & 0 \\
+1 & 0 & 1 & 0 \\
+1 & 0 & 1 & 0 \\
+1 & 0 & 1 & 0 \\
+1 & 0 & 1 & 0 \\
+1 & 0 & 0 & 1 \\
+1 & 0 & 0 & 1 \\
+1 & 0 & 0 & 1 \\
+\end{array}\right]
+$$
+$$\mathbf{Y} = \left[\begin{array}
+{rrr}
+y_{n11} \\
+y_{n12} \\
+y_{n13} \\
+y_{n21} \\
+y_{n22} \\
+y_{n31} \\
+y_{n32} \\
+y_{n33} \\
+y_{n34} \\
+y_{n41} \\
+y_{n42} \\
+y_{n43} \\
+\end{array}\right]
+$$
+The unbalance nature of the experiment introduces biases in the computation of the error term and the power of the main effect.
+
+## 8.12 Two-Way Analysis of Variance. 
+
+### a. For the case a = b = n = 2, write down a regression model that corresponds to the two-way analysis of variance.
+
+$$ y = \beta_{0} + \beta_{1}t_{1} + \beta_{2}t_{2} + \beta_{3}t_{1}t_{2} + \epsilon$$
+
+### b. What are the y vector and X matrix for this regression model?
+The y vectors is the values of of all the measurements taken as a result of the different treatments. In this case the length of y equal 2*2*2=8.  
+The X matrix present all the values of the different parameters that convey which of the treatments was applied to a given measurement.
+
+$$\mathbf{X} = \left[\begin{array}
+{rrr}
+1 & 1 & 1 & 1 \\
+1 & 1 & 1 & 1 \\
+1 & 1 & 0 & 0 \\
+1 & 1 & 0 & 0 \\
+1 & 0 & 1 & 0 \\
+1 & 0 & 1 & 0 \\
+1 & 0 & 0 & 0 \\
+1 & 0 & 0 & 0 \\
+\end{array}\right]
+$$
+
+### c. Discuss how the regression model could be used to test the hypotheses
+To test whether the treatments of type 1 means are equal we have to test whether the $\beta_{1}$ parameter is significantly different from zero. To test whether the the treatments type 2 means are equal we have to test whether the $\beta_{2}$ parameter is significantly different from zero.  
+Finally, to test whther there is an interaction between the treatments we have to test whether the $\beta_{3}$ parameter is significantly different from zero.  
+
+## 9.19 Estimate the parameters in a model for the gasoline mileage data in Table B.3 using ridge regression.
+```{r}
+ridge9.19 <- linearRidge(y ~ ., data = auto)  # the ridge regression model
+summary(ridge9.19)
+```
+
+
+
+### a. Use the ridge trace to select an appropriate value of k. Is the resulting model adequate?
+```{r}
+fit.ridge9.19 <- lm.ridge(formula= y ~  ., data= as.data.frame(scale(auto)), lambda=seq(from=0,to=10,by=1))
+
+
+matplot(x=t(fit.ridge9.19$coef),type='l',
+        main="Ridge Regression Lambda vs Coefficient Plot",
+        xlab="Lambda Values",
+        ylab="Coefficients",
+        col=c("black","red","blue","green","darkgreen","dodgerblue3","gray63","khaki3","lightpink","orchid","tan1"))
+grid()
+legend("topright",legend=rownames(fit.ridge9.19$coef),  
+       fill=c("black","red","blue","green","darkgreen","dodgerblue3","gray63","khaki3","lightpink","orchid","tan1"),
+       bty='n',
+       cex=1)
+
+#OLS regression
+# lm.ridge9.19 <- lm(formula= y ~ x1+x3, data= auto)
+lm.ridge9.19 <- lm(formula= y ~ x1+x3+x5+x8+x10, data= auto)
+lm.full9.19 <-  lm(formula= y ~., data= auto)
+summary(lm.ridge9.19)
+#Let's compare the Coefficients
+# table=cbind(coef(fit.ridge),coef(fit.ols))
+# colnames(table)=c("Ridge","OLS")
+# print(table)
+
+```
+
+From the above plot we observe how the most important predictors are the following: x1, x3, x5, x8, x10.  
+The model resulting from the ridge does not seems to be adequate as only one of the predictors is statistically significant. 
+
+### c. How much reduction in R2 has resulted from the use of ridge regression?
+```{r}
+(summary(lm.full9.19)$r.squared %>% round(2) - summary(lm.ridge9.19)$r.squared %>% round(2) ) * 100
+```
+
+The difference in R square from the full model and the model fitted using the k predictors suggested as an outcome of the ridge regression is `r (summary(lm.full9.19)$r.squared %>% round(2) - summary(lm.ridge9.19)$r.squared %>% round(2) ) * 100`%.
+
+
+## 9.22 Estimate the model parameters for the gasoline mileage data using principal- component regression.
+```{r}
+auto <- drop_na(auto)
+pc9.22 <- prcomp(auto, center = TRUE, scale. = TRUE)
+plot(pc9.22, type = "l")
+```
+
+I decided to keep only the first four Principal Components to use in the regression model. In fact, after the four compoment their contribution stibilizes.
+
+### a. How much has the residual sum of squares increased compared to least squares?
+```{r}
+pcauto <- as.data.frame(predict(pc9.22, auto), stringsAsFactors = FALSE)
+pcauto$y <- auto$y
+
+lmpc9.22 <- lm(formula = y ~ PC1 + PC2 + PC3 + PC4, pcauto)
+```
+
+The residual sum of squares of the PC model increased compared to the full model by `r sum(lmpc9.22$residuals ^ 2) - sum(lm.full9.19$residuals ^2)`.
+
+
+## 10.34 Use the all-possible-regressions selection on the methanol oxidation data in Table B.20. Perform a thorough analysis of the best candidate models. Compare your results with stepwise regression. Thoroughly discuss your recommendations.
+
+```{r}
+
+# 
+# x_1: reactor system 
+# x_2: temperature (degrees C) 
+# x_3: reactor residence time (seconds)
+# x_4: inlet concentration of methanol 
+# x_5: ratio of inlet oxygen to inlet methanol 
+# y: percent conversion
+
+
+
+methanol <- read.csv(file = "data/data-table-B20.csv")
+
+
+regsubsets.out <-
+    regsubsets(y ~ .,
+               data = methanol,
+               nbest = 1,       # 1 best model for each number of predictors
+               nvmax = NULL,    # NULL for no limit on number of variables
+               force.in = NULL, force.out = NULL,
+               method = "exhaustive")
+# regsubsets.out
+
+
+```
+
+```{r}
+summary.out <- summary(regsubsets.out)
+as.data.frame(summary.out$outmat)
+```
+
+```{r}
+plot(regsubsets.out, scale = "adjr2", main = "Adjusted R^2")
+```
+
+```{r}
+step(lm(y ~ ., data = methanol))
+```
+
+As we can observe from the leaps output plot the model with highest adj-Rsquared is the one that includes x1, x2. and x3. This result equals the one obtained by a backward step model selection.  
+The model suggested by both approaches appears to be the more conservative in terms of the number of variables selected. In fact, the models with comparable results in terms of adj-Rsquared in the leaps output include one or two more variables compared to the models that includes only x1, x2, x3. Therefore, it appers that including other variables apart x1, x2, x3 do not increase significantly the explanation power of the model.
+
+##  12.6 For the models shown below, determine whether it is a linear model, an intrinsically linear model, or a nonlinear model. If the model is intrinsically linear, show how it can be linearized by a suitable transformation.  
+a.  Intrinsically linear  
+b.  Non linears
+c.  Intrinsically linear  
+d.  Non linear  
+e.  Non linear  
+
+## 12.8 Consider the following observations:
+
+```{r}
+df <- read.csv(file = "data/data-prob-12-8.csv")
+```
+
+### a. Fit the nonlinear regression model
+```{r}
+df %>% ggplot(aes(x, y, df))+geom_point()
+```
+
+```{r}
+lm12.8 <- lm(formula = log(y) ~ x, df)
+summary(lm12.8)
+```
+
+I performed a lineariation on the non linear model in order to obtained the starting values. The linearized model is the following: $ log(u) = log(\Theta_{1}) + \Theta_{2}x$
+
+```{r}
+nls12.8 <- nls(formula = y ~ theta1 * exp(theta2*x), data = df, start = list(theta1 = 0.7522625, theta2 = 0.53261))
+```
+
+### b. Test for significance of regression.
+
+```{r}
+nls12.8_summ <- summary(nls12.8) %>% print()
+```
+
+### c. Estimate the error variance σ2.
+The estimate error variance equals 0.8666^2 = `r 0.8666^2`.
+
+### d. Test the hypotheses H0: theta1 = 0 and H0: theta2 = 0. Are both model parameters different from zero? If not, refit an appropriate model.
+From the model summary we observe how both model parameters are different from zero at 0.05 significance level.
+
+### e. Analyze the residuals from this model. Discuss model adequacy.
+```{r}
+nls12.8_res <- nlsResiduals(nls12.8)
+
+plot(nls12.8_res)
+```
+
+The model appears to present a good fit of the data as the assumptions of normality and homogenesticity are soddisfied. 
+
+## 12.09 Reconsider the data in the previous problem. The response measurements in the two columns were collected on two different days. Fit a new model. 
+To these data, where x1 is the original regressor from Problem 12.8 and x2 is an indicator variable with x2 = 0 if the observation was made on day 1 and x2 = 1 if the observation was made on day 2. Is there any indication that there is a difference between the two days (use theta30 = 0 as the starting value).
+
+```{r}
+df$x2 <- 0
+df$x2[8:14] <- 1
+
+nls12.9 <- nls(formula = y ~ theta3* x2 + theta1 * exp(theta2*x), data = df, start = list(theta1 = 0.7522625, theta2 = 0.53261, theta3 = 0))
+summary(nls12.9)
+```
+
+The parameter theta3 is not statistically diffirent from zero, therefore we have no evidence to support that the measurements collected in the two days are different.

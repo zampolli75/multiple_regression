@@ -1,0 +1,218 @@
+---
+title: "Holbrook Model"
+author: "Joaquin Rodriguez"
+date: "10/23/2017"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: 3
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(ggfortify)
+library(lmtest)
+library(stargazer)
+library(broom)
+library(knitr)
+library(car)
+
+holbrook <- read.csv(file = "data/holbrook.txt")
+holbrook <- 
+  holbrook %>% 
+  mutate(Tenure = as.factor(Tenure))
+```
+
+## Holbrook Model
+```{r}
+lm.holbrook <- lm(IncVote ~ PresPop + PersFin + Tenure, data = holbrook)
+lm.holbrook.summ <- summary(lm.holbrook)
+```
+
+The Holbrook model assumes that there the predictors of incumbent vote are:  
+1. Presential popularity: average percentage of the public who said that they approved of the way the president is handling his job.  
+2. Personal finance: measure of restrsopective personal finances based on responses to the Survey of Consumers.  
+3. Tenure in office: binary variable coded 1 for presidential candidates whose party has held the White House for two or more terms and 0 for candidates whose party has held the White Whouse for one term.  
+
+Following we observe the trend of the four indepedent variables over the analyzed period. 
+
+```{r}
+holbrook %>%
+  mutate(Tenure = as.integer(Tenure)) %>% 
+  gather(IncVote, PresPop, PersFin, Tenure, key = "Var", value = "Value") %>% 
+  ggplot(aes(Year, Value)) +
+  geom_line() +
+  facet_grid(Var ~ ., scales = "free") +
+  labs(title = "Variables of interest over the years")
+```
+
+Since we are dealing with we perform the Breusch-Godfrey Test for autocorrelation up to the firth order. 
+
+```{r}
+bgtest(lm.holbrook, order = 5)
+```
+
+The test indicates that there is no autocorrelation of the error terms, therefore the assumption of the linear model is satisfied.  
+
+Following we observe the correlation between the incumbent vote with the presidential popularity and personal finances measures.
+
+```{r results="asis"}
+stargazer(cor(holbrook[, 2:4]), type = "html")
+```
+
+We observe how the incumbent vote is highly correlated to the presidential popularity and personal finances measures. Furthermore, we observe how the presidential popularity and personal finances measures have also a high correlation, which might produce multicollinearity problems in the model.  
+
+Following we investigate the relationship between the analyzed measures.  
+
+```{r}
+holbrook %>%
+  gather(PresPop, PersFin, key = "Var", value = "Value") %>% 
+  ggplot(aes(Value, IncVote)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", se = T) +
+  facet_grid(. ~ Var, scales = "free") +
+  labs(title= "Relationship between Incumbent Vote and Presidential Popularity / Personal Finances")
+
+holbrook %>%
+  ggplot(aes(Tenure, IncVote)) +
+  geom_boxplot() +
+  labs(title= "Relationship between Incumbent Vote and Tenure")
+```
+
+From the above charts we observe how the relationship between presidential popularity and personal finances is somehow linear.  
+Furthermore, from the boxplot we observe how the tenure appears to have a significant impact in the incumbent vote.
+
+Following we output the results of the following linear model: 
+$$IncVote = \beta_{0}+\beta_{1}PresPop+\beta_{2}PersFin+\beta_{3}Tenure+\varepsilon$$
+```{r results="asis"}
+stargazer(lm.holbrook, report=('vc*p'), type = "html")
+```
+
+As we can observe, only the coefficients PersFin and Tenure are statistically significant. This results is not surprising as PresPop and PersFin had a high correlation, meaning that somehow there were explaining the same variability.  
+Following we analyze the residuals and verify the model assumptions.
+
+### Analysis of Residuals 
+
+```{r fig.height=12}
+autoplot(lm.holbrook, which = 1:6, ncol = 2, label.size = 3)
+```
+
+As we can observe there the assumptions of normality and homoscedasticity are not satisfied.
+
+```{r eval=FALSE}
+lm.holbrook %>% 
+  augment() %>% 
+  mutate(stud.res = .resid / (lm.holbrook.summ$sigma * sqrt(1 - hatvalues(lm.holbrook)))) %>%
+  ggplot(aes(stud.res)) +
+  geom_histogram(binwidth = 0.05)
+```
+
+Following we determine whether there are some influential or outliers observations. We will use the following cutoffs to identify these observations:  
+1. Cutoff CooksD 4/13 = 0.3 
+2. Cutoff hat values (2*4)/13 = 0.6  
+
+```{r}
+lm.holbrook %>% 
+  augment() %>% 
+  kable(.)
+  # filter(.hat > 2 * 4 / 13 | .cooksd > 4 / 13)
+```
+
+### Multi-collinearity
+The VIF for the three variables do not show evidence of multicollinearity among the predictors. 
+```{r}
+vif(lm.holbrook)
+```
+
+## Alternative Model
+Following we will fit a different model in order to assess whether we can define a more informative model which also soddisfies the model assumptions.
+
+```{r}
+lm.holbrook.null <- lm(IncVote ~ 1, data = holbrook)
+step(lm.holbrook.null, scope = list(lower = lm.holbrook.null, upper = lm.holbrook), direction = "forward")
+
+# holbrook %>% 
+#   mutate(Tenure = as.integer(as.character(Tenure))) -> a
+#   leaps(a[,3:5], a[,2],method = "Cp")
+```
+
+As we can observe from the forward step selection method, the full model is the one with lower AIC. However, as we already assess, the PresPop variable in the full model in not statistically significant at p < 0.05. Therefore, we will now fit a reduced model without the PresPop variable.
+$$IncVote = \beta_{0}+\beta_{1}PersFin+\beta_{2}Tenure+\varepsilon$$
+
+```{r}
+lm.holbrook2 <- lm(IncVote ~ PersFin + Tenure, data = holbrook)
+lm.holbrook2.summ <- summary(lm.holbrook2)
+```
+
+```{r}
+holbrook %>%
+  ggplot(aes(PersFin, IncVote, color = Tenure)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm") +
+  labs(title= "Relationship between Incumbent Vote and Personal Finance")
+```
+
+```{r results="asis"}
+stargazer(lm.holbrook2, type = "html", report=('vc*p'), header = FALSE)
+```
+
+### Analysis of Residuals
+
+```{r fig.height=12}
+autoplot(lm.holbrook2, which = 1:6, ncol = 2, label.size = 3)
+```
+
+```{r eval=FALSE}
+lm.holbrook2 %>% 
+  augment() %>% 
+  mutate(stud.res = .resid / (lm.holbrook.summ$sigma * sqrt(1 - hatvalues(lm.holbrook)))) %>%
+  ggplot(aes(stud.res)) +
+  geom_histogram(binwidth = 0.5)
+```
+
+```{r}
+lm.holbrook2 %>% 
+  augment() %>% 
+  kable(.)
+  # filter(.hat > 2 * 4 / 13 | .cooksd > 4 / 13)
+```
+
+Although the models assumptions seem to improve slightly compared to the full model, the normality distribution of the errors is not satisfied.
+
+## Model Comparison
+Following we will compare the two models in order to assess which performs better.  
+Performing the F-test between the full and reduced model we observe how they do not explain significantly different variation. 
+
+
+```{r}
+anova(lm.holbrook, lm.holbrook2)
+```
+
+```{r results="asis"}
+stargazer(lm.holbrook, lm.holbrook2, type = "html", report=('vc*p') ,header = FALSE)
+```
+
+```{r}
+
+library(qpcR)
+PRESS <- function(linear.model) {
+    pr <- residuals(linear.model)/(1 - lm.influence(linear.model)$hat)
+    sum(pr^2)
+}
+
+PRESS(lm.holbrook)
+PRESS(lm.holbrook2)
+```
+
+
+As we can observe the second model explains nearly the same variance as the first model. However, the second model is preferrer as its interpretation is more straightforward, and because all of its predictors are significant (at 0.05).  
+However, the usefulness of the models in only for prediction purposes since the assumptions of normality are not satified. 

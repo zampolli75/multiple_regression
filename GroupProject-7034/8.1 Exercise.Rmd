@@ -1,0 +1,260 @@
+---
+title: "8.1 Exercise"
+author: "Joaquin Rodriguez"
+date: "10/15/2017"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(ggfortify)
+library(lmtest)
+library(stargazer)
+library(broom)
+library(knitr)
+
+abramowitz <- read.csv(file = "data/abramowitz.txt")
+abramowitz <- 
+  abramowitz %>%
+  mutate(Term = as.factor(Term))
+campbell <- read.csv(file = "data/campbell.txt")
+holbrook <- read.csv(file = "data/holbrook.txt")
+holbrook <- 
+  holbrook %>% 
+  mutate(Tenure = as.factor(Tenure))
+lockerbie <- read.csv(file = "data/lockerbie.txt")
+```
+
+## Campbell Model
+```{r}
+campbell %>% 
+  gather(-Year, key = "Var", value = "Value") %>% 
+  ggplot(aes(Year, Value)) +
+  geom_line() +
+  facet_grid(Var ~ ., scales = "free")
+```
+
+```{r}
+campbell %>% 
+  gather(-Year, -IncVote, key = "Var", value = "Value") %>% 
+  ggplot(aes(Value, IncVote)) +
+  geom_point() +
+  facet_grid(. ~ Var, scales = "free")
+```
+
+
+```{r}
+lm.campbell <- lm(IncVote ~ SepTr + GDPGrR , data = campbell)
+summary(lm.campbell)
+
+autoplot(lm.campbell, which = 1:6, ncol = 2, label.size = 3)
+```
+
+```{r}
+bgtest(lm.campbell, order = 5)
+```
+
+
+## Abramowitzs Model
+
+```{r}
+abramowitz %>%
+  mutate(Term = as.integer(Term)) %>%
+  gather(IncVote, Term, PresPop, GDPGrR, key = "Var", value = "Value") %>%
+  ggplot(aes(Year, Value)) +
+  geom_line() +
+  facet_grid(Var ~ ., scales = "free")
+```
+
+```{r}
+abramowitz %>%
+  mutate(Term = as.integer(Term)) %>%
+  gather(Term, PresPop, GDPGrR, key = "Var", value = "Value") %>% 
+  ggplot(aes(Value, IncVote)) +
+  geom_point() +
+  facet_grid(. ~ Var, scales = "free")
+```
+
+
+```{r}
+lm.abramowitz <- lm(IncVote ~ PresPop + GDPGrR, data = abramowitz)
+summary(lm.abramowitz)
+
+autoplot(lm.abramowitz, which = 1:6, ncol = 2, label.size = 3)
+```
+
+```{r}
+# H0: there is no serial correlation up to p
+bgtest(lm.campbell, order = 5)
+```
+
+## Holbrook Model
+```{r}
+lm.holbrook <- lm(IncVote ~ PresPop + PersFin + Tenure, data = holbrook)
+lm.holbrook.summ <- summary(lm.holbrook)
+```
+
+The Holbrook model assumes that there the predictors of incumbent vote are:  
+1. Presential popularity: average percentage of the public who said that they approved of the way the president is handling his job.  
+2. Personal finance: measure of restrsopective personal finances based on responses to the Survey of Consumers.  
+3. Tenure in office: binary variable coded 1 for presidential candidates whose party has held the White House for two or more terms and 0 for candidates whose party has held the White Whouse for one term.  
+
+Following we observe the trend of the four indepedent variables over the analyzed period. 
+
+```{r}
+holbrook %>%
+  mutate(Tenure = as.integer(Tenure)) %>% 
+  gather(IncVote, PresPop, PersFin, Tenure, key = "Var", value = "Value") %>% 
+  ggplot(aes(Year, Value)) +
+  geom_line() +
+  facet_grid(Var ~ ., scales = "free") +
+  labs(title = "Variables of interest over the years")
+```
+
+Since we are dealing with we perform the Breusch-Godfrey Test for autocorrelation up to the firth order. 
+
+```{r}
+bgtest(lm.holbrook, order = 5)
+```
+
+The test indicates that there is no autocorrelation of the error terms, therefore the assumption of the linear model is satisfied.  
+
+Following we observe the correlation between the incumbent vote with the presidential popularity and personal finances measures.
+
+```{r results="asis"}
+stargazer(cor(holbrook[, 2:4]), type = "html")
+```
+
+We observe how the incumbent vote is highly correlated to the presidential popularity and personal finances measures. Furthermore, we observe how the presidential popularity and personal finances measures have also a high correlation, which might produce multicollinearity problems in the model.  
+
+Following we investigate the relationship between the analyzed measures.  
+
+```{r}
+holbrook %>%
+  gather(PresPop, PersFin, key = "Var", value = "Value") %>% 
+  ggplot(aes(Value, IncVote)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", se = T) +
+  facet_grid(. ~ Var, scales = "free") +
+  labs(title= "Relationship between Incumbent Vote and Presidential Popularity / Personal Finances")
+
+holbrook %>%
+  ggplot(aes(Tenure, IncVote)) +
+  geom_boxplot() +
+  labs(title= "Relationship between Incumbent Vote and Tenure")
+```
+
+From the above charts we observe how the relationship between presidential popularity and personal finances is somehow linear.  
+Furthermore, from the boxplot we observe how the tenure appears to have a significant impact in the incumbent vote.
+
+
+Following we output the results of the following linear model: 
+$$IncVote = \beta_{0}+\beta_{1}PresPop+\beta_{2}PersFin+\beta_{3}Tenure+\varepsilon$$
+```{r results="asis"}
+stargazer(lm.holbrook, type = "html" )
+```
+
+As we can observe, only the coefficients PersFin and Tenure are statistically significant. This results is not surprising as PresPop and PersFin had a high correlation, meaning that somehow there were explaining the same variability.  
+Following we analyze the residuals and verify the model assumptions.
+
+```{r fig.height=12}
+autoplot(lm.holbrook, which = 1:6, ncol = 2, label.size = 3)
+```
+
+As we can observe there the assumptions of normality and homoscedasticity are not satisfied.
+
+```{r eval=FALSE}
+lm.holbrook %>% 
+  augment() %>% 
+  mutate(stud.res = .resid / (lm.holbrook.summ$sigma * sqrt(1 - hatvalues(lm.holbrook)))) %>%
+  ggplot(aes(stud.res)) +
+  geom_histogram(binwidth = 0.05)
+```
+
+Following we determine whether there are some influential or outliers observations. We will use the following cutoffs to identify these observations:  
+1. Cutoff CooksD 4/13 = 0.3 
+2. Cutoff hat values (2*4)/13 = 0.6  
+
+```{r}
+lm.holbrook %>% 
+  augment() %>% 
+  filter(.hat > 2 * 4 / 13 | .cooksd > 4 / 13)
+```
+
+### Proposed Model
+```{r}
+lm.holbrook2 <- lm(IncVote ~ PersFin + Tenure, data = holbrook)
+lm.holbrook2.summ <- summary(lm.holbrook2)
+```
+
+```{r}
+holbrook %>%
+  ggplot(aes(PersFin, IncVote, color = Tenure)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm") +
+  labs(title= "Relationship between Incumbent Vote and Personal Finance")
+```
+
+Following we output the results of the following linear model: 
+$$IncVote = \beta_{0}+\beta_{1}PersFin+\beta_{2}Tenure+\varepsilon$$
+
+```{r results="asis"}
+stargazer(lm.holbrook2, type = "html" )
+```
+
+```{r fig.height=12}
+autoplot(lm.holbrook2, which = 1:6, ncol = 2, label.size = 3)
+```
+
+```{r eval=FALSE}
+lm.holbrook2 %>% 
+  augment() %>% 
+  mutate(stud.res = .resid / (lm.holbrook.summ$sigma * sqrt(1 - hatvalues(lm.holbrook)))) %>%
+  ggplot(aes(stud.res)) +
+  geom_histogram(binwidth = 0.5)
+```
+
+```{r}
+lm.holbrook2 %>% 
+  augment() %>% 
+  filter(.hat > 2 * 4 / 13 | .cooksd > 4 / 13)
+```
+
+## Lockerbie Model
+
+```{r}
+lockerbie %>% 
+  gather(IncVote, Income1, Income2, NextYr, Tenure, key = "Var", value = "Value") %>% 
+  ggplot(aes(Year, Value)) + 
+  geom_line() +
+  facet_grid(Var ~ ., scales = "free")
+```
+
+```{r}
+lockerbie %>% 
+  gather(Income1, Income2, NextYr, Tenure, key = "Var", value = "Value") %>% 
+  ggplot(aes(Value, IncVote)) + 
+  geom_point() +
+  facet_grid(. ~ Var, scales = "free")
+```
+
+
+```{r}
+lm.lockerbie <- lm(IncVote ~ Income1 + Income2 + NextYr + Tenure, data = lockerbie)
+summary(lm.lockerbie)
+```
+
+```{r}
+autoplot(lm.lockerbie, which = 1:6, ncol = 2, label.size = 3)
+```
+
+
+```{r}
+bgtest(lm.lockerbie, order = 5)
+```

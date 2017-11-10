@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1508769997479.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "321857663",
+    "id" : "E108E8D0",
+    "lastKnownWriteTime" : 1509375574,
+    "last_content_update" : 1509375574875,
+    "path" : "~/Library/Mobile Documents/com~apple~CloudDocs/LSU COURSES/EXST 7034/GroupProject-7034/HolbrookModel.Rmd",
+    "project_path" : "HolbrookModel.Rmd",
+    "properties" : {
+        "chunk_output_type" : "console",
+        "cursorPosition" : "134,0",
+        "last_setup_crc32" : "",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
